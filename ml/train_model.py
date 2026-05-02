@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 import numpy as np
 import joblib
@@ -13,6 +14,12 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
+from ml.lstm_model import LSTMClassifier
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -128,14 +135,30 @@ def main() -> None:
     )
     xgboost_model.fit(x_train_xgb, y_train)
 
+    # Train the LSTM classifier for neural-network comparison.
+    lstm_model = LSTMClassifier(
+        epochs=35,
+        batch_size=32,
+        lstm_units=32,
+        dense_units=16,
+        learning_rate=0.001,
+        random_state=42,
+    )
+    lstm_model.fit(x_train, y_train)
+
     random_forest_metrics = evaluate_model(random_forest, x_test, y_test)
     xgboost_metrics = evaluate_model(xgboost_model, x_test_xgb, y_test)
+    lstm_metrics = evaluate_model(lstm_model, x_test, y_test)
     random_forest_threshold = tune_threshold(
         random_forest.predict_proba(x_test)[:, 1],
         y_test,
     )
     xgboost_threshold = tune_threshold(
         xgboost_model.predict_proba(x_test_xgb)[:, 1],
+        y_test,
+    )
+    lstm_threshold = tune_threshold(
+        lstm_model.predict_proba(x_test)[:, 1],
         y_test,
     )
 
@@ -152,6 +175,12 @@ def main() -> None:
             "model_input_columns": XGBOOST_FEATURE_COLUMNS,
             "threshold_tuning": xgboost_threshold,
         },
+        "LSTMClassifier": {
+            "model": lstm_model,
+            "metrics": lstm_metrics,
+            "model_input_columns": FEATURE_COLUMNS,
+            "threshold_tuning": lstm_threshold,
+        },
     }
     selected_model_name = max(
         candidate_models,
@@ -167,6 +196,7 @@ def main() -> None:
 
     print(f"Random Forest Accuracy: {random_forest_metrics['accuracy']:.4f}")
     print(f"XGBoost Accuracy: {xgboost_metrics['accuracy']:.4f}")
+    print(f"LSTM Accuracy: {lstm_metrics['accuracy']:.4f}")
     print(
         "Random Forest Tuned Threshold: "
         f"{random_forest_threshold['threshold']:.2f} "
@@ -178,6 +208,12 @@ def main() -> None:
         f"{xgboost_threshold['threshold']:.2f} "
         f"(F1 {xgboost_threshold['f1_score']:.4f}, "
         f"Recall {xgboost_threshold['recall']:.4f})"
+    )
+    print(
+        "LSTM Tuned Threshold: "
+        f"{lstm_threshold['threshold']:.2f} "
+        f"(F1 {lstm_threshold['f1_score']:.4f}, "
+        f"Recall {lstm_threshold['recall']:.4f})"
     )
     print(f"Selected Production Model: {selected_model_name}")
 
