@@ -1,13 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { Activity, AlertTriangle, Gauge, ShieldCheck } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Gauge,
+  ShieldCheck,
+  Siren,
+} from "lucide-react";
 import { Toaster, toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 import InputForm from "./components/InputForm";
+import InsightsPanel from "./components/InsightsPanel";
 import LogTable from "./components/LogTable";
+import OperationsPanel from "./components/OperationsPanel";
 import PredictionCard from "./components/PredictionCard";
 import SummaryCard from "./components/SummaryCard";
+import TelemetryConsole from "./components/TelemetryConsole";
 import TrendChart from "./components/TrendChart";
+import VehicleHealthPanel from "./components/VehicleHealthPanel";
 
 const API_BASE_URL = "http://127.0.0.1:5000";
 
@@ -35,12 +45,16 @@ function App() {
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [sortOrder, setSortOrder] = useState("desc");
+  const [simulationActive, setSimulationActive] = useState(false);
+  const [simulationTick, setSimulationTick] = useState(0);
+  const [selectedAsset, setSelectedAsset] = useState("VH-204");
+  const simulationTimerRef = useRef(null);
 
   const latestProbability = prediction
     ? Math.round(prediction.fault_probability * 100)
     : 0;
   const healthScore = prediction
-    ? Math.max(0, Math.round(100 - prediction.fault_probability * 100))
+    ? Math.round((prediction.health_score ?? 1 - prediction.fault_probability) * 100)
     : 100;
   const avgRisk = history.length
     ? Math.round(
@@ -52,10 +66,32 @@ function App() {
     : 0;
   const latestStatus = prediction?.status ?? "Normal";
   const confidence = prediction
-    ? Math.max(latestProbability, 100 - latestProbability)
+    ? Math.round((prediction.confidence ?? Math.max(latestProbability, 100 - latestProbability) / 100) * 100)
     : 92;
+  const criticalEvents = history.filter(
+    (item) => item.result.status === "Critical"
+  ).length;
+  const avgHealth = history.length
+    ? Math.round(
+        history.reduce(
+          (total, item) =>
+            total +
+            (item.result.health_score !== undefined
+              ? item.result.health_score * 100
+              : 100 - item.result.fault_probability * 100),
+          0
+        ) / history.length
+      )
+    : healthScore;
 
   const topFactor = useMemo(() => {
+    if (prediction?.top_influencing_factor) {
+      return {
+        label: prediction.top_influencing_factor.name,
+        detail: `${prediction.top_influencing_factor.value} (impact ${prediction.top_influencing_factor.impact_score})`
+      };
+    }
+
     const ranked = Object.entries(formData)
       .map(([key, value]) => {
         const meta = fieldMeta[key];
@@ -97,6 +133,43 @@ function App() {
     loadHistory();
   }, []);
 
+  useEffect(() => {
+    if (!simulationActive) {
+      if (simulationTimerRef.current) {
+        clearInterval(simulationTimerRef.current);
+        simulationTimerRef.current = null;
+      }
+      return undefined;
+    }
+
+    simulationTimerRef.current = setInterval(() => {
+      setSimulationTick((current) => current + 1);
+    }, 6000);
+
+    return () => {
+      if (simulationTimerRef.current) {
+        clearInterval(simulationTimerRef.current);
+      }
+    };
+  }, [simulationActive]);
+
+  useEffect(() => {
+    if (!simulationActive || simulationTick === 0) {
+      return;
+    }
+
+    const simulatedPayload = {
+      temp: varyValue(formData.temp, 0.9, 1.8),
+      process_temp: varyValue(formData.process_temp, 0.9, 2.2),
+      rpm: varyValue(formData.rpm, 15, 120),
+      torque: varyValue(formData.torque, 1.2, 7.5),
+      wear: varyValue(formData.wear, 1, 8)
+    };
+
+    setFormData(simulatedPayload);
+    runPrediction(simulatedPayload, true);
+  }, [simulationActive, simulationTick]);
+
   function handleChange(event) {
     const { name, value } = event.target;
     setFormData((current) => ({
@@ -107,14 +180,31 @@ function App() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    await runPrediction(formData, false);
+  }
+
+  async function runPrediction(payload, fromSimulation) {
     setLoading(true);
     setError("");
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/predict`, formData);
+      const response = await axios.post(`${API_BASE_URL}/api/predict`, payload);
       setPrediction(response.data);
       await loadHistory();
-      toast.success("Prediction completed");
+      toast.success(
+        fromSimulation ? "Live simulation updated" : "Prediction completed"
+      );
+
+      if (response.data.status === "Critical") {
+        toast(
+          `Critical alert for ${selectedAsset}: ${Math.round(
+            response.data.fault_probability * 100
+          )}% risk`,
+          {
+            icon: "⚠️"
+          }
+        );
+      }
     } catch (requestError) {
       const message =
         requestError.response?.data?.error || "Prediction request failed.";
@@ -161,7 +251,7 @@ function App() {
       subtitle: "Across recent predictions",
       icon: Activity,
       tone: avgRisk > 60 ? "amber" : "blue",
-      trend: `${history.length} logged events`
+      trend: `${criticalEvents} critical events`
     }
   ];
 
@@ -215,12 +305,14 @@ function App() {
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Top factor
+                  Active asset
                 </div>
                 <div className="mt-3 text-lg font-semibold text-slate-100">
-                  {topFactor.label}
+                  {selectedAsset}
                 </div>
-                <div className="mt-1 text-sm text-slate-400">{topFactor.detail}</div>
+                <div className="mt-1 text-sm text-slate-400">
+                  {simulationActive ? "Simulation stream active" : "Manual scoring mode"}
+                </div>
               </div>
             </div>
           </div>
@@ -249,10 +341,40 @@ function App() {
               confidence={confidence}
               topFactor={topFactor}
             />
+
+            <OperationsPanel
+              assetId={selectedAsset}
+              setAssetId={setSelectedAsset}
+              simulationActive={simulationActive}
+              setSimulationActive={setSimulationActive}
+              avgHealth={avgHealth}
+              criticalEvents={criticalEvents}
+              prediction={prediction}
+            />
           </div>
 
           <div className="space-y-6">
             <TrendChart history={history} />
+
+            <VehicleHealthPanel
+              formData={formData}
+              prediction={prediction}
+              healthScore={healthScore}
+            />
+
+            <TelemetryConsole
+              history={history}
+              formData={formData}
+              prediction={prediction}
+              healthScore={healthScore}
+            />
+
+            <InsightsPanel
+              prediction={prediction}
+              avgHealth={avgHealth}
+              avgRisk={avgRisk}
+              history={history}
+            />
 
             <LogTable
               history={filteredHistory}
@@ -267,6 +389,12 @@ function App() {
       </div>
     </div>
   );
+}
+
+function varyValue(value, drift, spread) {
+  const direction = Math.random() > 0.55 ? 1 : -1;
+  const offset = drift + Math.random() * spread;
+  return Number((value + direction * offset).toFixed(2));
 }
 
 export default App;

@@ -1,5 +1,11 @@
 import { motion } from "framer-motion";
-import { BrainCircuit, Radar, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+  BrainCircuit,
+  ClipboardList,
+  Radar,
+  ShieldAlert,
+  ShieldCheck
+} from "lucide-react";
 
 function PredictionCard({
   prediction,
@@ -10,6 +16,8 @@ function PredictionCard({
 }) {
   const status = prediction?.status ?? "Normal";
   const isCritical = status === "Critical";
+  const riskBand = prediction?.risk_band ?? "Low";
+  const riskWindow = prediction?.estimated_risk_window ?? "Continue scheduled monitoring";
   const badgeStyles = isCritical
     ? "border-rose-400/25 bg-rose-500/10 text-rose-200"
     : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200";
@@ -81,9 +89,18 @@ function PredictionCard({
             <InfoPill label="Confidence" value={`${confidence}%`} icon={BrainCircuit} />
             <InfoPill
               label="Top influencing factor"
-              value={topFactor.label}
-              helper={topFactor.detail}
+              value={prediction?.top_influencing_factor?.name ?? topFactor.label}
+              helper={
+                prediction?.top_influencing_factor
+                  ? `Current ${prediction.top_influencing_factor.value} | baseline ${prediction.top_influencing_factor.mean}`
+                  : topFactor.detail
+              }
             />
+          </div>
+
+          <div className="mt-3 grid gap-3 xl:grid-cols-2">
+            <InfoPill label="Maintenance Priority" value={riskBand} icon={ClipboardList} />
+            <InfoPill label="Risk Window" value={riskWindow} />
           </div>
         </div>
 
@@ -104,9 +121,10 @@ function PredictionCard({
           <div className="mt-6 rounded-2xl border border-white/10 bg-[#030914] p-4">
             <div className="text-sm font-medium text-slate-200">Interpretation</div>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              {isCritical
-                ? "The machine state is above the alert threshold. Maintenance attention should be prioritized."
-                : "The machine is operating within the acceptable risk envelope based on the current input pattern."}
+              {prediction?.explanation ??
+                (isCritical
+                  ? "The machine state is above the alert threshold. Maintenance attention should be prioritized."
+                  : "The machine is operating within the acceptable risk envelope based on the current input pattern.")}
             </p>
           </div>
         </div>

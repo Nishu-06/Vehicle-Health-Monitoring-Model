@@ -36,6 +36,16 @@ function TrendChart({ history }) {
     .slice()
     .reverse()
     .map((item) => Math.round(item.result.fault_probability * 100));
+  const healthValues = history
+    .slice()
+    .reverse()
+    .map((item) =>
+      Math.round(
+        (item.result.health_score !== undefined
+          ? item.result.health_score
+          : 1 - item.result.fault_probability) * 100
+      )
+    );
 
   const data = {
     labels,
@@ -67,6 +77,17 @@ function TrendChart({ history }) {
         pointBackgroundColor: "#67e8f9",
         fill: true,
         tension: 0.42,
+        borderWidth: 2
+      },
+      {
+        label: "Health Score",
+        data: healthValues,
+        borderColor: "rgba(74, 222, 128, 0.95)",
+        backgroundColor: "rgba(74, 222, 128, 0)",
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        borderDash: [6, 4],
+        tension: 0.3,
         borderWidth: 2
       }
     ]
@@ -130,6 +151,21 @@ function TrendChart({ history }) {
         </div>
       </div>
 
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <QuickStat
+          label="Highest Risk"
+          value={values.length ? `${Math.max(...values)}%` : "--"}
+        />
+        <QuickStat
+          label="Lowest Health"
+          value={healthValues.length ? `${Math.min(...healthValues)}` : "--"}
+        />
+        <QuickStat
+          label="Samples"
+          value={`${history.length}`}
+        />
+      </div>
+
       <div className="mt-6 h-[340px]">
         {history.length > 0 ? (
           <Line data={data} options={options} />
@@ -140,6 +176,15 @@ function TrendChart({ history }) {
         )}
       </div>
     </motion.section>
+  );
+}
+
+function QuickStat({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3">
+      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div>
+      <div className="mt-2 text-xl font-semibold text-slate-100">{value}</div>
+    </div>
   );
 }
 

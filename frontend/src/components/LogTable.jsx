@@ -63,6 +63,7 @@ function LogTable({
               <th className="px-4 py-3 font-medium">Torque</th>
               <th className="px-4 py-3 font-medium">Wear</th>
               <th className="px-4 py-3 font-medium">Probability</th>
+              <th className="px-4 py-3 font-medium">Priority</th>
               <th className="px-4 py-3 font-medium">Status</th>
             </tr>
           </thead>
@@ -88,6 +89,9 @@ function LogTable({
                   <td className="px-4 py-3 font-medium text-slate-100">
                     {Math.round(item.result.fault_probability * 100)}%
                   </td>
+                  <td className="px-4 py-3 text-slate-300">
+                    {item.result.maintenance_priority ?? item.result.risk_band ?? "--"}
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
@@ -103,7 +107,7 @@ function LogTable({
               ))
             ) : (
               <tr>
-                <td colSpan="8" className="px-4 py-10 text-center text-slate-500">
+                <td colSpan="9" className="px-4 py-10 text-center text-slate-500">
                   No prediction records available for the current filter.
                 </td>
               </tr>
