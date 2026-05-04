@@ -18,7 +18,7 @@ function LogTable({
         <div>
           <h2 className="text-lg font-semibold text-white">Prediction Log</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Recent machine scoring events captured by the backend.
+            Recent machine scoring events with added RUL lifecycle context.
           </p>
         </div>
 
@@ -62,6 +62,7 @@ function LogTable({
               <th className="px-4 py-3 font-medium">RPM</th>
               <th className="px-4 py-3 font-medium">Torque</th>
               <th className="px-4 py-3 font-medium">Wear</th>
+              <th className="px-4 py-3 font-medium">RUL</th>
               <th className="px-4 py-3 font-medium">Probability</th>
               <th className="px-4 py-3 font-medium">Priority</th>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -79,13 +80,16 @@ function LogTable({
                   <td className="px-4 py-3 text-slate-400">
                     {new Date(item.createdAt).toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-slate-200">{item.input.temp}</td>
+                  <td className="px-4 py-3 text-slate-200">{formatDecimal(item.input.temp, 2)}</td>
                   <td className="px-4 py-3 text-slate-200">
-                    {item.input.process_temp}
+                    {formatDecimal(item.input.process_temp, 2)}
                   </td>
-                  <td className="px-4 py-3 text-slate-200">{item.input.rpm}</td>
-                  <td className="px-4 py-3 text-slate-200">{item.input.torque}</td>
-                  <td className="px-4 py-3 text-slate-200">{item.input.wear}</td>
+                  <td className="px-4 py-3 text-slate-200">{formatDecimal(item.input.rpm, 2)}</td>
+                  <td className="px-4 py-3 text-slate-200">{formatDecimal(item.input.torque, 2)}</td>
+                  <td className="px-4 py-3 text-slate-200">{formatDecimal(item.input.wear, 2)}</td>
+                  <td className="px-4 py-3 font-medium text-slate-100">
+                    {Math.round(item.result.predicted_rul ?? 0)}
+                  </td>
                   <td className="px-4 py-3 font-medium text-slate-100">
                     {Math.round(item.result.fault_probability * 100)}%
                   </td>
@@ -107,7 +111,7 @@ function LogTable({
               ))
             ) : (
               <tr>
-                <td colSpan="9" className="px-4 py-10 text-center text-slate-500">
+                <td colSpan="10" className="px-4 py-10 text-center text-slate-500">
                   No prediction records available for the current filter.
                 </td>
               </tr>
@@ -117,6 +121,10 @@ function LogTable({
       </div>
     </motion.section>
   );
+}
+
+function formatDecimal(value, digits) {
+  return typeof value === "number" ? value.toFixed(digits) : "--";
 }
 
 export default LogTable;

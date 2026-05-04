@@ -10,7 +10,8 @@ function OperationsPanel({
   setSimulationActive,
   avgHealth,
   criticalEvents,
-  prediction
+  prediction,
+  avgRul
 }) {
   const recommendations = prediction?.maintenance_recommendations ?? [
     "Run an assessment to generate targeted maintenance guidance.",
@@ -76,9 +77,14 @@ function OperationsPanel({
               tone="emerald"
             />
             <MiniStat
+              label="Fleet Avg RUL"
+              value={avgRul ? `${avgRul} cycles` : "--"}
+              tone="cyan"
+            />
+            <MiniStat
               label="Critical Events"
               value={`${criticalEvents}`}
-              tone={criticalEvents > 0 ? "rose" : "cyan"}
+              tone={criticalEvents > 0 ? "rose" : "emerald"}
             />
           </div>
         </div>

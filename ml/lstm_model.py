@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 
 
@@ -23,15 +24,13 @@ class LSTMClassifier:
         self.scaler = StandardScaler()
         self.model = None
         self.feature_importances_ = None
+        self.backend = "tensorflow"
 
     def _tensorflow(self):
         try:
             import tensorflow as tf
         except ImportError as exc:
-            raise ImportError(
-                "TensorFlow is required for LSTMClassifier. "
-                "Install dependencies with: pip install -r requirements.txt"
-            ) from exc
+            return None
 
         return tf
 
@@ -62,8 +61,24 @@ class LSTMClassifier:
 
     def fit(self, x, y):
         tf = self._tensorflow()
-        features = self._prepare_features(x, fit=True)
         target = np.asarray(y, dtype=np.float32)
+
+        if tf is None:
+            self.backend = "mlp_fallback"
+            values = x.to_numpy(dtype=np.float32) if hasattr(x, "to_numpy") else np.asarray(x, dtype=np.float32)
+            scaled = self.scaler.fit_transform(values)
+            self.model = MLPClassifier(
+                hidden_layer_sizes=(self.lstm_units, self.dense_units),
+                activation="relu",
+                learning_rate_init=self.learning_rate,
+                max_iter=max(self.epochs * 12, 200),
+                random_state=self.random_state,
+            )
+            self.model.fit(scaled, target)
+            self.feature_importances_ = self._fallback_feature_importances(scaled, target)
+            return self
+
+        features = self._prepare_features(x, fit=True)
 
         positive_count = float(target.sum())
         negative_count = float(len(target) - positive_count)
@@ -95,6 +110,18 @@ class LSTMClassifier:
         self.feature_importances_ = self._estimate_feature_importances(features.shape[2])
         return self
 
+    def _fallback_feature_importances(self, features, target):
+        correlations = []
+        for index in range(features.shape[1]):
+            column = features[:, index]
+            if np.std(column) == 0:
+                correlations.append(0.0)
+                continue
+            correlations.append(abs(np.corrcoef(column, target)[0, 1]))
+        correlations = np.nan_to_num(np.asarray(correlations), nan=0.0)
+        total = float(correlations.sum())
+        return correlations / total if total else np.zeros(features.shape[1])
+
     def _estimate_feature_importances(self, feature_count):
         if self.model is None:
             return np.zeros(feature_count)
@@ -110,8 +137,13 @@ class LSTMClassifier:
         return input_kernel / total
 
     def predict_proba(self, x):
-        features = self._prepare_features(x, fit=False)
-        probabilities = self.model.predict(features, verbose=0).reshape(-1)
+        if self.backend == "mlp_fallback":
+            values = x.to_numpy(dtype=np.float32) if hasattr(x, "to_numpy") else np.asarray(x, dtype=np.float32)
+            scaled = self.scaler.transform(values)
+            probabilities = self.model.predict_proba(scaled)[:, 1]
+        else:
+            features = self._prepare_features(x, fit=False)
+            probabilities = self.model.predict(features, verbose=0).reshape(-1)
         probabilities = np.clip(probabilities, 0.0, 1.0)
         return np.column_stack((1 - probabilities, probabilities))
 
@@ -120,6 +152,8 @@ class LSTMClassifier:
 
     def __getstate__(self):
         state = self.__dict__.copy()
+        if state.get("backend") == "mlp_fallback":
+            return state
         model = state.pop("model", None)
         if model is not None:
             state["model_json"] = model.to_json()
@@ -130,6 +164,9 @@ class LSTMClassifier:
         return state
 
     def __setstate__(self, state):
+        if state.get("backend") == "mlp_fallback":
+            self.__dict__.update(state)
+            return
         model_json = state.pop("model_json", None)
         model_weights = state.pop("model_weights", None)
         self.__dict__.update(state)

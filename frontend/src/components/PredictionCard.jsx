@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import {
   BrainCircuit,
   ClipboardList,
+  Hourglass,
   Radar,
   ShieldAlert,
   ShieldCheck
@@ -18,6 +19,8 @@ function PredictionCard({
   const isCritical = status === "Critical";
   const riskBand = prediction?.risk_band ?? "Low";
   const riskWindow = prediction?.estimated_risk_window ?? "Continue scheduled monitoring";
+  const predictedRul = prediction?.predicted_rul;
+  const rulBand = prediction?.rul_band ?? "Healthy Runway";
   const badgeStyles = isCritical
     ? "border-rose-400/25 bg-rose-500/10 text-rose-200"
     : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200";
@@ -100,6 +103,15 @@ function PredictionCard({
 
           <div className="mt-3 grid gap-3 xl:grid-cols-2">
             <InfoPill label="Maintenance Priority" value={riskBand} icon={ClipboardList} />
+            <InfoPill
+              label="Predicted RUL"
+              value={predictedRul !== undefined ? `${Math.round(predictedRul)} cycles` : "--"}
+              helper={rulBand}
+              icon={Hourglass}
+            />
+          </div>
+
+          <div className="mt-3">
             <InfoPill label="Risk Window" value={riskWindow} />
           </div>
         </div>

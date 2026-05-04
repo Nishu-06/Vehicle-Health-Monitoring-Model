@@ -34,7 +34,7 @@ function TelemetryConsole({ history, formData, prediction, healthScore }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-xs uppercase tracking-[0.22em] text-amber-300/80">
-            Intelligent Vehicle Health Monitoring
+            Real-Time Prognostics Feed
           </div>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             Executive Telemetry Console
@@ -49,30 +49,30 @@ function TelemetryConsole({ history, formData, prediction, healthScore }) {
 
       <div className="mt-6 grid gap-4 xl:grid-cols-2">
         <TelemetryChart
-          title="Speed vs Time"
+          title="Core Speed Trend"
           color="#e7c46f"
           labels={series.labels}
-          values={series.speed}
-          yMax={32}
+          values={series.coreSpeed}
+          yMax={560}
         />
         <TelemetryChart
-          title="RPM vs Time"
+          title="Combustor Temperature"
           color="#7bc6d6"
           labels={series.labels}
-          values={series.rpm}
-          yMax={40}
+          values={series.temperature}
+          yMax={1450}
         />
         <TelemetryChart
-          title="Voltage Trend"
+          title="Predicted RUL"
           color="#d88766"
           labels={series.labels}
-          values={series.voltage}
-          yMax={100}
+          values={series.rul}
+          yMax={380}
         />
         <TelemetryChart
-          title="Health Composition"
+          title="Subsystem Health Mix"
           color="#e7c46f"
-          labels={["Engine", "Battery", "Brake", "Tire", "Driver"]}
+          labels={series.healthLabels}
           values={series.healthComposition}
           yMax={100}
           smooth
@@ -92,7 +92,7 @@ function TelemetryChart({ title, color, labels, values, yMax, smooth = false }) 
         borderColor: color,
         backgroundColor: "transparent",
         borderWidth: 2.5,
-        pointRadius: title === "Health Composition" ? 3 : 0,
+        pointRadius: title === "Subsystem Health Mix" ? 3 : 0,
         pointHoverRadius: 4,
         pointBackgroundColor: color,
         tension: smooth ? 0.38 : 0.2
@@ -162,50 +162,33 @@ function buildTelemetrySeries(history, formData, prediction, healthScore) {
 
   const source = history.length > 0 ? history.slice().reverse() : createFallbackRows(formData);
 
-  const rpm = source.map((item, index) => {
-    const raw = item.input?.rpm ?? item.rpm ?? formData.rpm;
-    return Math.max(2, Math.round(raw / 45 + (index % 3) * 1.4));
-  });
-
-  const speed = source.map((item, index) => {
-    const raw = item.input?.rpm ?? item.rpm ?? formData.rpm;
-    return Math.max(4, Math.round(raw / 85 + ((index % 4) - 1) * 1.1));
-  });
-
-  const voltage = source.map((item, index) => {
-    const torque = item.input?.torque ?? item.torque ?? formData.torque;
-    const temp = item.input?.temp ?? item.temp ?? formData.temp;
-    return clamp(Math.round(torque * 1.45 + (temp - 280) + (index % 5) * 4), 0, 100);
-  });
-
-  const probability = prediction?.fault_probability
-    ? prediction.fault_probability * 100
-    : 100 - healthScore;
-  const battery = clamp(Math.round(100 - probability * 1.35), 0, 100);
-  const brake = clamp(Math.round(100 - formData.torque * 1.35), 0, 100);
-  const tire = clamp(Math.round(100 - formData.wear * 0.18), 0, 100);
-  const driver = clamp(Math.round(100 - probability * 0.45), 0, 100);
-  const engine = clamp(Math.round(healthScore + 6), 0, 100);
-
   return {
     labels,
-    speed,
-    rpm,
-    voltage,
-    healthComposition: [engine, battery, brake, tire, driver]
+    coreSpeed: source.map((item) => item.input?.rpm ?? item.rpm ?? formData.rpm),
+    temperature: source.map((item) => item.input?.process_temp ?? item.process_temp ?? formData.process_temp),
+    rul: source.map((item, index) =>
+      Math.max(
+        0,
+        Math.round(item.result?.predicted_rul ?? (prediction?.predicted_rul ?? 140) - index * 4)
+      )
+    ),
+    healthLabels: ["Engine", "Battery", "Brake", "Vibration", "Lifecycle"],
+    healthComposition: [
+      Math.max(0, Math.round(100 - (prediction?.fault_probability ?? 0) * 100)),
+      Math.max(0, Math.round(formData.efficiency_index * 2.1)),
+      Math.max(0, Math.round(100 - ((formData.thermal_load - 300) * 0.18))),
+      Math.max(0, Math.round(100 - formData.vibration_index)),
+      Math.max(0, Math.round((prediction?.predicted_rul ?? 0) / 3.6))
+    ]
   };
 }
 
 function createFallbackRows(formData) {
   return Array.from({ length: 10 }, (_, index) => ({
-    rpm: formData.rpm + (index % 4) * 70 - 80,
-    torque: formData.torque + (index % 3) * 4 - 3,
-    temp: formData.temp + (index % 5) * 1.2 - 2
+    rpm: Math.max(1000, formData.rpm + (index % 4) * 70 - 80),
+    process_temp: Math.max(290, formData.process_temp + (index % 5) * 1.2 - 2),
+    result: { predicted_rul: Math.max(0, 160 - index * 9) }
   }));
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }
 
 export default TelemetryConsole;

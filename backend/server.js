@@ -35,9 +35,35 @@ app.get("/", (_request, response) => {
 
 app.post("/api/predict", async (request, response) => {
   try {
-    const { temp, process_temp, rpm, torque, wear } = request.body;
+    const {
+      temp,
+      process_temp,
+      rpm,
+      torque,
+      wear,
+      cycle,
+      vibration_index,
+      thermal_load,
+      pressure_margin,
+      efficiency_index,
+      flow_index
+    } = request.body;
 
-    if ([temp, process_temp, rpm, torque, wear].some((value) => typeof value !== "number")) {
+    const values = [
+      temp,
+      process_temp,
+      rpm,
+      torque,
+      wear,
+      cycle,
+      vibration_index,
+      thermal_load,
+      pressure_margin,
+      efficiency_index,
+      flow_index
+    ];
+
+    if (values.some((value) => typeof value !== "number" || Number.isNaN(value))) {
       return response.status(400).json({
         error: "All input values must be numbers."
       });
@@ -48,7 +74,13 @@ app.post("/api/predict", async (request, response) => {
       process_temp,
       rpm,
       torque,
-      wear
+      wear,
+      cycle,
+      vibration_index,
+      thermal_load,
+      pressure_margin,
+      efficiency_index,
+      flow_index
     });
 
     const predictionResult = apiResponse.data;
@@ -56,7 +88,19 @@ app.post("/api/predict", async (request, response) => {
 
     if (isMongoReady) {
       savedPrediction = new Prediction({
-        input: { temp, process_temp, rpm, torque, wear },
+        input: {
+          temp,
+          process_temp,
+          rpm,
+          torque,
+          wear,
+          cycle,
+          vibration_index,
+          thermal_load,
+          pressure_margin,
+          efficiency_index,
+          flow_index
+        },
         result: predictionResult
       });
       await savedPrediction.save();
@@ -84,7 +128,12 @@ app.get("/api/history", async (_request, response) => {
       return response.json([]);
     }
 
-    const history = await Prediction.find().sort({ createdAt: -1 }).limit(10);
+    const history = await Prediction.find({
+      "input.temp": { $exists: true },
+      "result.predicted_rul": { $exists: true }
+    })
+      .sort({ createdAt: -1 })
+      .limit(10);
     response.json(history);
   } catch (error) {
     response.status(500).json({ error: "Could not fetch history" });

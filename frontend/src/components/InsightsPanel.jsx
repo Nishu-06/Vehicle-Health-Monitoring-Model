@@ -4,7 +4,9 @@ import { BarChart3, BrainCircuit, Target } from "lucide-react";
 function InsightsPanel({ prediction, avgHealth, avgRisk, history }) {
   const factors = prediction?.contributing_factors ?? [];
   const metrics = prediction?.model_metrics;
+  const rulMetrics = prediction?.rul_metrics;
   const modelComparison = prediction?.model_comparison ?? {};
+  const rulModelComparison = prediction?.rul_model_comparison ?? {};
   const criticalRate = history.length
     ? Math.round(
         (history.filter((item) => item.result.status === "Critical").length /
@@ -61,6 +63,11 @@ function InsightsPanel({ prediction, avgHealth, avgRisk, history }) {
               <MetricTile label="Recall" value={formatMetric(metrics?.recall)} />
               <MetricTile label="F1 Score" value={formatMetric(metrics?.f1_score)} />
             </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <MetricTile label="RUL MAE" value={formatNumber(rulMetrics?.mae)} />
+              <MetricTile label="RUL RMSE" value={formatNumber(rulMetrics?.rmse)} />
+              <MetricTile label="RUL R2" value={formatNumber(rulMetrics?.r2_score)} />
+            </div>
             <div className="mt-3 rounded-2xl border border-white/10 bg-[#030914] px-4 py-3 text-sm text-slate-400">
               Decision threshold:{" "}
               <span className="font-medium text-slate-200">
@@ -94,6 +101,37 @@ function InsightsPanel({ prediction, avgHealth, avgRisk, history }) {
                         </div>
                         <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
                           accuracy
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {Object.keys(rulModelComparison).length > 0 ? (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-[#030914] p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  RUL Model Comparison
+                </div>
+                <div className="mt-3 space-y-3">
+                  {Object.entries(rulModelComparison).map(([name, value]) => (
+                    <div
+                      key={name}
+                      className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950 px-3 py-3"
+                    >
+                      <div>
+                        <div className="text-sm font-medium text-slate-100">{name}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          MAE: {formatNumber(value.mae)} | RMSE: {formatNumber(value.rmse)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-semibold text-slate-100">
+                          {formatNumber(value.r2_score)}
+                        </div>
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                          r2
                         </div>
                       </div>
                     </div>
@@ -183,6 +221,14 @@ function formatMetric(value) {
   }
 
   return `${Math.round(value * 100)}%`;
+}
+
+function formatNumber(value) {
+  if (value === undefined || value === null) {
+    return "--";
+  }
+
+  return `${Math.round(value * 100) / 100}`;
 }
 
 export default InsightsPanel;

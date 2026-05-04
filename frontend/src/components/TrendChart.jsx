@@ -46,6 +46,10 @@ function TrendChart({ history }) {
           : 1 - item.result.fault_probability) * 100
       )
     );
+  const rulValues = history
+    .slice()
+    .reverse()
+    .map((item) => Math.round(item.result.predicted_rul ?? 0));
 
   const data = {
     labels,
@@ -53,6 +57,7 @@ function TrendChart({ history }) {
       {
         label: "Failure Probability (%)",
         data: values,
+        yAxisID: "yRisk",
         borderColor: "#38bdf8",
         backgroundColor(context) {
           const chart = context.chart;
@@ -82,12 +87,24 @@ function TrendChart({ history }) {
       {
         label: "Health Score",
         data: healthValues,
+        yAxisID: "yRisk",
         borderColor: "rgba(74, 222, 128, 0.95)",
         backgroundColor: "rgba(74, 222, 128, 0)",
         pointRadius: 0,
         pointHoverRadius: 4,
         borderDash: [6, 4],
         tension: 0.3,
+        borderWidth: 2
+      },
+      {
+        label: "Predicted RUL",
+        data: rulValues,
+        yAxisID: "yRul",
+        borderColor: "rgba(251, 191, 36, 0.95)",
+        backgroundColor: "rgba(251, 191, 36, 0)",
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.32,
         borderWidth: 2
       }
     ]
@@ -117,7 +134,7 @@ function TrendChart({ history }) {
         ticks: { color: "#64748b" },
         grid: { display: false }
       },
-      y: {
+      yRisk: {
         min: 0,
         max: 100,
         ticks: {
@@ -126,6 +143,18 @@ function TrendChart({ history }) {
         },
         grid: {
           color: "rgba(51, 65, 85, 0.45)"
+        }
+      },
+      yRul: {
+        position: "right",
+        min: 0,
+        max: Math.max(100, ...rulValues, 0),
+        ticks: {
+          color: "#94a3b8",
+          callback: (value) => `${value}`
+        },
+        grid: {
+          drawOnChartArea: false
         }
       }
     }
@@ -140,10 +169,10 @@ function TrendChart({ history }) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-white">
-            Failure Probability Trend
+            Risk and Life Trend
           </h2>
           <p className="mt-1 text-sm text-slate-400">
-            Last 10 prediction events with smoothed risk progression.
+            Last 10 prediction events showing probability, health score, and remaining life.
           </p>
         </div>
         <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.16em] text-slate-400">
@@ -161,8 +190,8 @@ function TrendChart({ history }) {
           value={healthValues.length ? `${Math.min(...healthValues)}` : "--"}
         />
         <QuickStat
-          label="Samples"
-          value={`${history.length}`}
+          label="Lowest RUL"
+          value={rulValues.length ? `${Math.min(...rulValues)}` : "--"}
         />
       </div>
 

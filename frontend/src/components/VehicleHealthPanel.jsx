@@ -1,11 +1,6 @@
 import { motion } from "framer-motion";
 
 function VehicleHealthPanel({ formData, prediction, healthScore }) {
-  const probability = Math.round((prediction?.fault_probability ?? 0) * 100);
-  const engineStatus = probability > 70 ? "Attention" : "Healthy";
-  const batteryScore = clamp(Math.round(100 - probability * 1.35), 0, 100);
-  const brakeScore = clamp(Math.round(100 - formData.torque * 1.4), 0, 100);
-  const driverStatus = probability > 70 ? "Alert" : "Normal";
   const tone =
     healthScore < 45 ? "Critical" : healthScore < 70 ? "Warning" : "Healthy";
   const accentColor =
@@ -20,28 +15,41 @@ function VehicleHealthPanel({ formData, prediction, healthScore }) {
     background: `conic-gradient(${accentColor} ${healthScore * 3.6}deg, rgba(15, 23, 42, 0.92) 0deg)`
   };
 
-  const cards = [
-    {
-      label: "Engine",
-      value: engineStatus,
-      helper: `RPM ${Math.round(formData.rpm)}, temperature ${formData.temp.toFixed(1)} K.`
-    },
-    {
-      label: "Battery",
-      value: `${batteryScore}%`,
-      helper: `Estimated remaining life ${Math.max(0, Math.round(batteryScore / 5))} cycles.`
-    },
-    {
-      label: "Brake",
-      value: `${brakeScore}%`,
-      helper: `Estimated remaining distance ${Math.max(900, brakeScore * 140)} km.`
-    },
-    {
-      label: "Driver",
-      value: driverStatus,
-      helper: `DSSI ${clamp(Math.round(healthScore + 8), 0, 100)}`
-    }
-  ];
+  const cards =
+    prediction?.subsystem_health?.map((item) => ({
+      label: item.name,
+      value: `${Math.round(item.score)}%`,
+      helper:
+        item.name === "Lifecycle"
+          ? `${Math.round(prediction?.predicted_rul ?? 0)} cycles remaining.`
+          : `${item.name} subsystem stability score`
+    })) ?? [
+      {
+        label: "Engine",
+        value: `${Math.max(0, Math.round(100 - (prediction?.fault_probability ?? 0) * 100))}%`,
+        helper: `RPM ${Math.round(formData.rpm)}, temperature ${formData.temp.toFixed(1)} K.`
+      },
+      {
+        label: "Battery",
+        value: `${Math.max(0, Math.round(formData.efficiency_index * 2.1))}%`,
+        helper: `Efficiency ${formData.efficiency_index.toFixed(2)} with flow ${formData.flow_index.toFixed(1)}.`
+      },
+      {
+        label: "Brake",
+        value: `${Math.max(0, Math.round(100 - ((formData.thermal_load - 300) * 0.18)))}%`,
+        helper: `Thermal load ${formData.thermal_load.toFixed(1)} under torque ${formData.torque.toFixed(1)}.`
+      },
+      {
+        label: "Vibration",
+        value: `${Math.max(0, Math.round(100 - formData.vibration_index))}%`,
+        helper: `Vibration index ${formData.vibration_index.toFixed(1)} with margin ${formData.pressure_margin.toFixed(2)}.`
+      },
+      {
+        label: "Lifecycle",
+        value: `${Math.max(0, Math.round((prediction?.predicted_rul ?? 0) / 3.6))}%`,
+        helper: `Estimated remaining life ${Math.round(prediction?.predicted_rul ?? 0)} cycles.`
+      }
+    ];
 
   return (
     <motion.section
@@ -51,18 +59,18 @@ function VehicleHealthPanel({ formData, prediction, healthScore }) {
     >
       <div className="grid gap-4 xl:grid-cols-[1.05fr_1.45fr]">
         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
-          <h3 className="text-lg font-semibold text-slate-100">Vehicle Health Score</h3>
+          <h3 className="text-lg font-semibold text-slate-100">Subsystem Health Score</h3>
 
-          <div className="mt-8 flex items-center justify-center">
+          <div className="mt-6 flex items-center justify-center sm:mt-8">
             <div
-              className="relative flex h-72 w-72 items-center justify-center rounded-full"
+              className="relative flex h-56 w-56 items-center justify-center rounded-full sm:h-64 sm:w-64 xl:h-72 xl:w-72"
               style={ringStyle}
             >
-              <div className="flex h-48 w-48 flex-col items-center justify-center rounded-full bg-slate-950 text-center shadow-[inset_0_0_30px_rgba(255,255,255,0.03)]">
-                <div className="text-6xl font-semibold tracking-tight text-slate-50">
+              <div className="flex h-36 w-36 flex-col items-center justify-center rounded-full bg-slate-950 text-center shadow-[inset_0_0_30px_rgba(255,255,255,0.03)] sm:h-44 sm:w-44 xl:h-48 xl:w-48">
+                <div className="text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl xl:text-6xl">
                   {healthScore}
                 </div>
-                <div className="mt-4 text-xs uppercase tracking-[0.26em] text-slate-500">
+                <div className="mt-2 text-[10px] uppercase tracking-[0.22em] text-slate-500 sm:mt-3 sm:text-xs sm:tracking-[0.26em]">
                   Health
                 </div>
               </div>
@@ -76,7 +84,7 @@ function VehicleHealthPanel({ formData, prediction, healthScore }) {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {cards.map((card) => (
             <div
               key={card.label}
@@ -95,10 +103,6 @@ function VehicleHealthPanel({ formData, prediction, healthScore }) {
       </div>
     </motion.section>
   );
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }
 
 export default VehicleHealthPanel;

@@ -4,8 +4,10 @@ import {
   Activity,
   AlertTriangle,
   Gauge,
+  Moon,
+  Sun,
   ShieldCheck,
-  Siren,
+  TimerReset
 } from "lucide-react";
 import { Toaster, toast } from "react-hot-toast";
 import { motion } from "framer-motion";
@@ -26,7 +28,13 @@ const initialForm = {
   process_temp: 310,
   rpm: 1500,
   torque: 40,
-  wear: 10
+  wear: 10,
+  cycle: 104,
+  vibration_index: 42,
+  thermal_load: 345,
+  pressure_margin: 23.3,
+  efficiency_index: 38.8,
+  flow_index: 521.5
 };
 
 const fieldMeta = {
@@ -34,7 +42,13 @@ const fieldMeta = {
   process_temp: { label: "Process Temperature", unit: "K", ideal: 310 },
   rpm: { label: "Rotational Speed", unit: "rpm", ideal: 1500 },
   torque: { label: "Torque", unit: "Nm", ideal: 40 },
-  wear: { label: "Tool Wear", unit: "min", ideal: 10 }
+  wear: { label: "Tool Wear", unit: "min", ideal: 10 },
+  cycle: { label: "Operating Cycles", unit: "cycles", ideal: 104 },
+  vibration_index: { label: "Vibration Index", unit: "score", ideal: 42 },
+  thermal_load: { label: "Brake Thermal Load", unit: "deg", ideal: 345 },
+  pressure_margin: { label: "Pressure Margin", unit: "ratio", ideal: 23.3 },
+  efficiency_index: { label: "Battery Efficiency", unit: "%", ideal: 38.8 },
+  flow_index: { label: "Flow Stability", unit: "index", ideal: 521.5 }
 };
 
 function App() {
@@ -48,7 +62,19 @@ function App() {
   const [simulationActive, setSimulationActive] = useState(false);
   const [simulationTick, setSimulationTick] = useState(0);
   const [selectedAsset, setSelectedAsset] = useState("VH-204");
+  const [isLightTheme, setIsLightTheme] = useState(false);
   const simulationTimerRef = useRef(null);
+
+  useEffect(() => {
+    const storedTheme = localStorage.getItem("dashboard_theme");
+    const nextIsLight = storedTheme === "light";
+    setIsLightTheme(nextIsLight);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("light-theme", isLightTheme);
+    localStorage.setItem("dashboard_theme", isLightTheme ? "light" : "dark");
+  }, [isLightTheme]);
 
   const latestProbability = prediction
     ? Math.round(prediction.fault_probability * 100)
@@ -56,6 +82,7 @@ function App() {
   const healthScore = prediction
     ? Math.round((prediction.health_score ?? 1 - prediction.fault_probability) * 100)
     : 100;
+  const predictedRul = prediction ? Math.round(prediction.predicted_rul ?? 0) : 0;
   const avgRisk = history.length
     ? Math.round(
         history.reduce(
@@ -83,6 +110,14 @@ function App() {
         ) / history.length
       )
     : healthScore;
+  const avgRul = history.length
+    ? Math.round(
+        history.reduce(
+          (total, item) => total + (item.result.predicted_rul ?? 0),
+          0
+        ) / history.length
+      )
+    : predictedRul;
 
   const topFactor = useMemo(() => {
     if (prediction?.top_influencing_factor) {
@@ -104,7 +139,7 @@ function App() {
       .sort((a, b) => b.delta - a.delta);
 
     return ranked[0];
-  }, [formData]);
+  }, [formData, prediction]);
 
   const filteredHistory = useMemo(() => {
     const sorted = [...history].sort((a, b) => {
@@ -163,7 +198,13 @@ function App() {
       process_temp: varyValue(formData.process_temp, 0.9, 2.2),
       rpm: varyValue(formData.rpm, 15, 120),
       torque: varyValue(formData.torque, 1.2, 7.5),
-      wear: varyValue(formData.wear, 1, 8)
+      wear: varyValue(formData.wear, 1, 8),
+      cycle: varyValue(formData.cycle, 1, 4),
+      vibration_index: varyValue(formData.vibration_index, 0.6, 4.5),
+      thermal_load: varyValue(formData.thermal_load, 2, 12),
+      pressure_margin: varyValue(formData.pressure_margin, 0.03, 0.16),
+      efficiency_index: varyValue(formData.efficiency_index, 0.08, 0.35),
+      flow_index: varyValue(formData.flow_index, 0.2, 1.2)
     };
 
     setFormData(simulatedPayload);
@@ -199,9 +240,9 @@ function App() {
         toast(
           `Critical alert for ${selectedAsset}: ${Math.round(
             response.data.fault_probability * 100
-          )}% risk`,
+          )}% risk | RUL ${Math.round(response.data.predicted_rul)} cycles`,
           {
-            icon: "⚠️"
+            icon: "!"
           }
         );
       }
@@ -246,12 +287,12 @@ function App() {
       trend: `${confidence}% confidence`
     },
     {
-      title: "Avg Risk",
-      value: `${avgRisk}%`,
-      subtitle: "Across recent predictions",
-      icon: Activity,
-      tone: avgRisk > 60 ? "amber" : "blue",
-      trend: `${criticalEvents} critical events`
+      title: "Predicted RUL",
+      value: predictedRul ? `${predictedRul}` : "--",
+      subtitle: "Estimated useful life in cycles",
+      icon: TimerReset,
+      tone: predictedRul < 30 ? "red" : predictedRul < 80 ? "amber" : "blue",
+      trend: avgRul ? `fleet avg ${avgRul}` : "waiting"
     }
   ];
 
@@ -285,9 +326,9 @@ function App() {
                 Fleet Reliability Operations Dashboard
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
-                Monitor machine health, quantify failure risk, and review recent
-                inference history with a production-style dashboard built on the
-                AI4I predictive maintenance model.
+                Keep the original fault prediction workflow, then layer in
+                lifecycle telemetry and remaining useful life forecasting for a
+                richer vehicle-health monitoring view.
               </p>
             </div>
 
@@ -299,7 +340,7 @@ function App() {
                 <div className="mt-3 flex items-center gap-3">
                   <div className="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_20px_rgba(74,222,128,0.6)]" />
                   <div className="text-lg font-semibold text-slate-100">
-                    Inference pipeline active
+                    RF + XGB + LSTM active
                   </div>
                 </div>
               </div>
@@ -314,6 +355,14 @@ function App() {
                   {simulationActive ? "Simulation stream active" : "Manual scoring mode"}
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsLightTheme((current) => !current)}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-sm font-medium text-slate-100 transition hover:bg-slate-800/70 sm:col-span-2"
+              >
+                {isLightTheme ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                {isLightTheme ? "Switch to Dark" : "Switch to Light"}
+              </button>
             </div>
           </div>
         </motion.header>
@@ -324,7 +373,7 @@ function App() {
           ))}
         </section>
 
-        <main className="mt-6 grid gap-6 2xl:grid-cols-[380px_minmax(0,1fr)]">
+        <main className="mt-6 grid gap-6 2xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="space-y-6">
             <InputForm
               formData={formData}
@@ -350,6 +399,7 @@ function App() {
               avgHealth={avgHealth}
               criticalEvents={criticalEvents}
               prediction={prediction}
+              avgRul={avgRul}
             />
           </div>
 
